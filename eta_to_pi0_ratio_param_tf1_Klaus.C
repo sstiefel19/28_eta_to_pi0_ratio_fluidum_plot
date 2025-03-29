@@ -11,7 +11,7 @@
 // Klaus Reygers
 //
 
-void eta_to_pi0_ratio_param_tf1() {
+void eta_to_pi0_ratio_param_tf1_Klaus() {
     
     const double m_pi0 = 0.135; // in GeV
     const double m_eta = 0.547862; // in GeV
