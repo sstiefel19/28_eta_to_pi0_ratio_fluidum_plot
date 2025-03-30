@@ -173,7 +173,10 @@ void eta_to_pi0_ratio_param_tf1() {
     //////////////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////
     // 3) ================================ the plotting function for all cents ===================
-    auto plotSingleCentralityClass = [&](std::string const &theCent){
+    auto plotSingleCentralityClass = [&](std::string const &theCent, 
+                                         TCanvas *theCanvasDrawOn = nullptr){
+       
+
         float lLegendTextSize = 0.05; // Removed duplicate declaration
         Color_t lColor = lMapColors.at(theCent);
         
@@ -187,13 +190,23 @@ void eta_to_pi0_ratio_param_tf1() {
         printf("SFS f_eta_to_pi0.GetName() = %s\n, g_eta_to_pi0_function_error_band.GetName() = %s\n, g_eta_to_pi0_fluidum_points_werr.data() = %s\n\n", f_eta_to_pi0.GetName(), g_eta_to_pi0_function_error_band.GetName(), g_eta_to_pi0_fluidum_points_werr.GetName());
 
         std::string lNameCanvas(Form("c_%s\n", theCent.data()));
-        TCanvas* c2 = new TCanvas(lNameCanvas.data(), lNameCanvas.data(), 800, 600);
-        TH2F* fr2 = new TH2F(Form("fr_%s", theCent.data()), 
-                             Form("eta/pi0 ratio (%s), Pb-Pb, 5.02 TeV;p_#text{T} (GeV/c);#eta / #pi^{0}", 
-                                  theCent.data()), 
-                             1, 0., 8., 1, 0., 0.7);
-        fr2->Draw();
-        auto leg = utils_plotting::GetLegend(0.5, 0.2, 0.90, 0.4, true /*theDrawAlready*/); // this already removes the boarder
+        TCanvas &c2 = theCanvasDrawOn 
+            ? *theCanvasDrawOn
+            : *new TCanvas(lNameCanvas.data(), lNameCanvas.data(), 800, 600);
+        c2.cd();
+        
+        if (!theCanvasDrawOn) {
+            TH2F* fr2 = new TH2F(Form("fr_%s", theCent.data()), 
+                                 Form("eta/pi0 ratio (%s), Pb-Pb, 5.02 TeV;p_#text{T} (GeV/c);#eta / #pi^{0}", 
+                                     theCent.data()), 
+                                 1, 0., 8., 1, 0., 0.7);
+            fr2->Draw();
+        }
+        TLegend *leg = theCanvasDrawOn
+            ? static_cast<TLegend*>(nullptr)
+            : utils_plotting::GetLegend(0.5, 0.2, 0.90, 0.4, true /*theDrawAlready*/); // this already removes the boarder
+
+        // do the plots
 
         // the errorband for the parametrization
         utils_plotting::DrawAndAdd(g_eta_to_pi0_function_error_band,"same3", lColor, 1.0,
@@ -216,12 +229,14 @@ void eta_to_pi0_ratio_param_tf1() {
         g_eta_to_pi0_fluidum_points_werr.Write();
         g_eta_to_pi0_function_error_band.Write();
         f.Close();
-    };
+        return &c2;
+    }; // end plotSingleCentralityClass
 
     // 4) ================================ iterate over all cents ================================
     // plot all centralities
+    TCanvas *cMaster = nullptr;
     for (auto const &iPair : lMapColors){
         std::string const &lCent = iPair.first;
-        plotSingleCentralityClass(lCent);
+        cMaster = plotSingleCentralityClass(lCent, cMaster);
     }
 }
