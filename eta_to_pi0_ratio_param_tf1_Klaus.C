@@ -146,6 +146,14 @@ void eta_to_pi0_ratio_param_tf1_Klaus() {
     g_eta_to_pi0_error_band_00_10->SetLineWidth(0);
     g_eta_to_pi0_error_band_30_50->SetLineWidth(0);
     
+    g_eta_to_pi0_error_band_00_20->SetName("Graph errorband 0-20");
+    g_eta_to_pi0_error_band_20_40->SetName("Graph errorband 20-40");
+    g_eta_to_pi0_error_band_40_60->SetName("Graph errorband 40-60");
+    g_eta_to_pi0_error_band_60_80->SetName("Graph errorband 60-80");
+    g_eta_to_pi0_error_band_00_10->SetName("Graph errorband 0-10");
+    g_eta_to_pi0_error_band_30_50->SetName("Graph errorband 30-50");
+    
+
     //
     // Here we provide the eta/pi0 values as predicted with the help of FluiduM (+ data)
     // and which are used to obtain the eta/pi0 parameterizations
@@ -192,6 +200,13 @@ void eta_to_pi0_ratio_param_tf1_Klaus() {
     auto g_eta_to_pi0_predicted_60_80 = new TGraphErrors(n_points_predicted, pt_predicted, eta_to_pi0_predicted_60_80, nullptr, eta_to_pi0_predicted_err_60_80);
     auto g_eta_to_pi0_predicted_00_10 = new TGraphErrors(n_points_predicted, pt_predicted, eta_to_pi0_predicted_00_10, nullptr, eta_to_pi0_predicted_err_00_10);
     auto g_eta_to_pi0_predicted_30_50 = new TGraphErrors(n_points_predicted, pt_predicted, eta_to_pi0_predicted_30_50, nullptr, eta_to_pi0_predicted_err_30_50);
+
+    g_eta_to_pi0_predicted_00_20->SetName("Fluidum pred 00_20");
+    g_eta_to_pi0_predicted_20_40->SetName("Fluidum pred 20_40");
+    g_eta_to_pi0_predicted_40_60->SetName("Fluidum pred 40_60");
+    g_eta_to_pi0_predicted_60_80->SetName("Fluidum pred 60_80");
+    g_eta_to_pi0_predicted_00_10->SetName("Fluidum pred 00_10");
+    g_eta_to_pi0_predicted_30_50->SetName("Fluidum pred 30_50");
 
 
     //

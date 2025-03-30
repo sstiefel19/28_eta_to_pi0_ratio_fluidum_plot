@@ -32,8 +32,9 @@ void eta_to_pi0_ratio_param_tf1() {
     // the four centrality classes 0-20%, 20-40%, 40-60%, and 60-80%.
     // for 0-10%, 30-50%: using 0010_CutStudiesOverview_2024-11-29.root, 3050_CutStudiesOverview_2024-11-29.root
 
+    // define parameters for the TF1s representing the parametrizations and their relative errors
     typedef  std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> TMapStrPairVecVec;
-    TMapStrPairVecVec lMapCentsParsPars = {                                     // for 0-10%, 30-50%: using 0010_CutStudiesOverview_2024-11-29.root, 3050_CutStudiesOverview_2024-11-29.root
+    TMapStrPairVecVec lMapCentsParsPars = {
         { "0-20%", {{ 0.977721, 0.618195, 0.117933, 3.37214, 0.500039, 0.487 } , { 0.0342168, 0.114004, 0.416835, 6.49309, 0.00168754, 1.08525 }}  },
         { "20-40%", {{ 0.920456, 0.595247, 0.121594, 3.24199, 0.855145, 0.487 } , { 0.0379397, 0.0942153, 0.413325, 4.43503, 0.00244873, 1.14762 }} },
         { "40-60%", {{ 0.844084, 0.601972, 0.130577, 3.17672, 1.49528,  0.487 } , { 0.0384199, 0.0884536, 0.42096, 4.15613, 0.00306472, 1.14425 }}  },
@@ -43,44 +44,30 @@ void eta_to_pi0_ratio_param_tf1() {
         { "pp"   , {{ 0.4828412883910595, 0., 0.09905518928551621, 3.5412800248011624, 2.6541672047505935, 0.487} , { 0., 0., 0., 0., 0., 0., 0.}} }
     };
 
+    // fill lMap_f_eta_to_pi0_func_and_f_rel_err 
     // contains <0-10%, <f_ratio, f_ratio_err>>
-    std::map<std::string, std::pair<TF1*, TF1*>> lMap_f_eta_to_pi0_func_err; 
+    std::map<std::string, std::pair<TF1*, TF1*>> lMap_f_eta_to_pi0_func_and_f_rel_err; 
     for (auto const &iPair : lMapCentsParsPars){
         auto const &lCent = iPair.first;
+        auto const lCentNoSymb(lCent.substr(0, lCent.size()-1));
         auto const &lPairParsPars = iPair.second;
 
         auto createTF1andSetPars = [&](std::string const &theSuff){
             bool isErrors = theSuff.size();
             auto const &lPars = isErrors ? lPairParsPars.second : lPairParsPars.first;
-            TF1 *f = new TF1(Form("f_eta_to_pi0_%s%s", theSuff.data(), lCent.data()), 
+            TF1 *f = new TF1(Form("f_eta_to_pi0_%s%s", theSuff.data(), 
+                                   lCentNoSymb.data()), 
                              isErrors ? ratio_err : ratio, 0., 200.);
-            f->SetParameters(lPars.data());
-            f->SetNpx(10000);
+            if (f){
+                f->SetTitle(f->GetName());
+                f->SetParameters(lPars.data());
+                f->SetNpx(10000);
+            }
             return f;
         };
-        lMap_f_eta_to_pi0_func_err.insert({ lCent, { createTF1andSetPars(""), createTF1andSetPars("err") } });
+        lMap_f_eta_to_pi0_func_and_f_rel_err.insert({ lCent, { createTF1andSetPars(""), createTF1andSetPars("err") } });
     }
-
-    // create TGraphErrors representing the error band around the eta/pi0 parameterizations
-    auto createErrorBandGraph = [](TF1 &theF, TF1 &theFerr, Color_t theColor){
-        const int n_points = 1000;
-        double pt[n_points];
-        double pt_min = 0.;
-        double pt_max = 200.;
-        double step = (pt_max - pt_min) / (n_points - 1);
-
-        double func[n_points], func_err[n_points];
-
-        for (int i = 0; i < n_points; ++i) {
-            pt[i] = pt_min + i * step;        
-            func[i]     = theF.Eval(pt[i]);
-            func_err[i] = theF.Eval(pt[i]) * theFerr.Eval(pt[i]);
-        }
-        auto &g_err_band = *new TGraphErrors(n_points, pt, func, nullptr, func_err);
-        g_err_band.SetLineWidth(0);
-        g_err_band.SetFillColorAlpha(theColor, 0.3);  // Semi-transparent red error band
-        return &g_err_band;
-    };
+    // lMap_f_eta_to_pi0_func_and_f_rel_err is filled now
 
     std::map<std::string, Color_t> lMapColors({
         { "0-20%", kRed },
@@ -94,20 +81,49 @@ void eta_to_pi0_ratio_param_tf1() {
        cout << "SFS 94\n";
 
 
+    // create TGraphErrors representing the error band around the eta/pi0 parameterizations
+    auto createErrorBandGraph = [&](std::pair<std::string, std::pair<TF1*, TF1*>> const &thePairCentPairTF1s){
+        const int n_points = 1000;
+        std::vector<double> lVecPt;
+        double pt_min = 0.;
+        double pt_max = 200.;
+        double step = (pt_max - pt_min) / (n_points - 1);
+
+        double func[n_points], func_err[n_points];
+        std::string const &lCent = thePairCentPairTF1s.first;
+        TF1 &lF = *(thePairCentPairTF1s.second.first);
+        TF1 &lFerr = *thePairCentPairTF1s.second.second;
+        
+        for (int i = 0; i < n_points; ++i) {
+            double pt = pt_min + i * step;        
+            func[i]     = lF.Eval(pt);
+            func_err[i] = lF.Eval(pt) * lFerr.Eval(pt);
+            lVecPt.push_back(pt);
+        }
+        auto &g_err_band = *new TGraphErrors(lVecPt.size(), lVecPt.data(), func, nullptr, func_err);
+        g_err_band.SetName(Form("%s_g_err_band", lCent.substr(0, lCent.size()-1).data())); // remove %
+        g_err_band.SetLineWidth(0);
+        g_err_band.SetFillColorAlpha(lMapColors.at(lCent), 0.3);  // Semi-transparent red error band
+        return &g_err_band;
+    };
+
+    
+    // fill lMapGraphFunctionErrorbands
     // create map for bands
     std::map<std::string, TGraphErrors*> lMapGraphFunctionErrorbands;
-    for (auto const &iPair : lMap_f_eta_to_pi0_func_err){
+    for (auto const &iPair : lMap_f_eta_to_pi0_func_and_f_rel_err){
         auto const &lCent = iPair.first;
         printf("SFS lCent = %s\n", lCent.data());
         lMapGraphFunctionErrorbands.insert(
-            std::pair{ lCent, createErrorBandGraph(*iPair.second.first, 
-                                                   *iPair.second.second, 
-                                                   lMapColors.at(lCent)) });
+            std::pair{ lCent, createErrorBandGraph(iPair) });
     }
+    // lMapGraphFunctionErrorbands is filled now
     cout << "SFS 109\n";
+
+    // fill lMapCentsPairVecsPointsErrors_fluidum
     // Here we provide the eta/pi0 values as predicted with the help of FluiduM (+ data)
     // and which are used to obtain the eta/pi0 parameterization
-    TMapStrPairVecVec lMapCentsPointsErrors_fluidum({
+    TMapStrPairVecVec lMapCentsPairVecsPointsErrors_fluidum({
         { "0-20%", 
             { { 0.0311997, 0.0392724, 0.0442586, 0.0535506, 0.0642473, 0.0784368, 0.0939543, 0.107721, 0.123157, 0.135399, 0.148764, 0.165187, 0.182871, 0.199335, 0.212247, 0.227712, 0.249586, 0.287404, 0.300101, 0.325733, 0.351506, 0.377361, 0.403812, 0.425581, 0.442681, 0.459794, 0.501249, 0.525111, 0.552412, 0.563631, 0.574083, 0.572864 } , 
     { 0.00093599, 0.00117817, 0.00132776, 0.00160652, 0.00192742, 0.0023531, 0.00281863, 0.00323164, 0.00369472, 0.00406196, 0.00446292, 0.0049556, 0.00548613, 0.00598004, 0.00636742, 0.00683136, 0.00748759, 0.00862213, 0.00900303, 0.00977198, 0.0105452, 0.0113208, 0.0121144, 0.0127674, 0.0132804, 0.0137938, 0.0150375, 0.0157533, 0.0165724, 0.0169089, 0.0172225, 0.0171859 } }  },
@@ -123,19 +139,30 @@ void eta_to_pi0_ratio_param_tf1() {
     { 0.00100718, 0.00129215, 0.00153535, 0.00183606, 0.0022473, 0.00270993, 0.00315524, 0.00357452, 0.00402902, 0.0046823, 0.00493402, 0.00555144, 0.00595083, 0.00640363, 0.00681554, 0.00724703, 0.00783589, 0.00894721, 0.00909831, 0.00976595, 0.0103272, 0.0110579, 0.0114867, 0.0119136, 0.0125071, 0.0129482, 0.0141092, 0.0146426, 0.0153467, 0.0158018, 0.015933, 0.0164178 } } },
         { "pp"   , { { 0.0 }, { 0.0 } } }});
 
-    std::vector<double> lPts{ 0.325, 0.375, 0.425, 0.475, 0.525, 0.575, 0.625, 0.675, 0.725, 0.775, 0.825, 0.875, 0.925, 0.975, 1.05, 1.15, 1.25, 1.35, 1.45, 1.55, 1.65, 1.75, 1.85, 1.95, 2.1, 2.3, 2.5, 2.7, 2.9, 3.1 };    
+    std::vector<double> lVecFluidumPts{0.225, 0.275, 0.325, 0.375, 0.425, 0.475, 0.525, 0.575, 0.625, 0.675, 0.725, 0.775, 0.825, 0.875, 0.925, 0.975, 1.05, 1.15, 1.25, 1.35, 1.45, 1.55, 1.65, 1.75, 1.85, 1.95, 2.1, 2.3, 2.5, 2.7, 2.9, 3.1};    
+    
     typedef std::pair<std::vector<double> const &, std::vector<double> const &> TPairVecVec;
-    auto createGraphPredicted = [&](TPairVecVec const &thePair){
-        auto *g = new TGraphErrors(lPts.size(), lPts.data(), thePair.first.data(), nullptr, thePair.second.data());
+    auto createGraphFluidum = [&](std::pair<std::string, TPairVecVec> const &thePairCentPairVecs){
+        std::string const &lCent = thePairCentPairVecs.first;
+        TPairVecVec const &lPairPointsErrors = thePairCentPairVecs.second;
+        std::string lName(Form("%s_GraphFluidum", lCent.substr(0, lCent.size()-1).data()));
+        auto *g = new TGraphErrors(lVecFluidumPts.size(), lVecFluidumPts.data(), 
+                                   lPairPointsErrors.first.data(), nullptr, lPairPointsErrors.second.data());
+        if (!g){
+            printf("ERROR: createGraphFluidum(): Graph %s could not be created!\n", lName.data());
+        } else { g->SetName(lName.data()); }
         return g;
     };
 
-    std::map<std::string, TGraphErrors*> lMap_g_eta_to_pi0_fluidum_prediction_err;
-    for (auto const &iPair : lMapCentsPointsErrors_fluidum){
-        lMap_g_eta_to_pi0_fluidum_prediction_err.insert(std::make_pair(iPair.first, createGraphPredicted(iPair.second)));
+    // fill lMap_g_eta_to_pi0_fluidum_points_w_errors
+    std::map<std::string, TGraphErrors*> lMap_g_eta_to_pi0_fluidum_points_w_errors;
+    for (auto const &iPairCentPairVecs : lMapCentsPairVecsPointsErrors_fluidum){
+        std::string const &lCent = iPairCentPairVecs.first;
+        lMap_g_eta_to_pi0_fluidum_points_w_errors.insert(
+            std::make_pair(iPairCentPairVecs.first, createGraphFluidum(iPairCentPairVecs)));
     }
 
-    // end of definitions
+    // all elementary structures filled
     ///////////////////////////////////////////////////////////////////////////////
 
     // first plot: all parameterizations with error bands 
@@ -146,12 +173,18 @@ void eta_to_pi0_ratio_param_tf1() {
     float lLegendTextSize = 0.05; // Removed duplicate declaration
     auto plotSingleCentralityClass = [&](std::string const &theCent){
         Color_t lColor = lMapColors.at(theCent);
-        auto &f_eta_to_pi0 = *lMap_f_eta_to_pi0_func_err.at(theCent).first;
-        auto &g_eta_to_pi0_function_error_band = *lMapGraphFunctionErrorbands.at(theCent);
-        auto &g_eta_to_pi0_fluidum_pred_err = *lMap_g_eta_to_pi0_fluidum_prediction_err.at(theCent);
         
-        std::string lName(Form("c_%s", theCent.data()));
-        TCanvas* c2 = new TCanvas(lName.data(), lName.data(), 800, 600);
+        // TF1 function
+        auto &f_eta_to_pi0 = *lMap_f_eta_to_pi0_func_and_f_rel_err.at(theCent).first;
+        // graph with errorband for the TF1
+        auto &g_eta_to_pi0_function_error_band = *lMapGraphFunctionErrorbands.at(theCent);
+        // graph with fluidum points 
+        auto &g_eta_to_pi0_fluidum_points_werr = *lMap_g_eta_to_pi0_fluidum_points_w_errors.at(theCent);
+        
+        printf("SFS f_eta_to_pi0.GetName() = %s\n, g_eta_to_pi0_function_error_band.GetName() = %s\n, g_eta_to_pi0_fluidum_points_werr.data() = %s\n\n", f_eta_to_pi0.GetName(), g_eta_to_pi0_function_error_band.GetName(), g_eta_to_pi0_fluidum_points_werr.GetName());
+
+        std::string lNameCanvas(Form("c_%s\n", theCent.data()));
+        TCanvas* c2 = new TCanvas(lNameCanvas.data(), lNameCanvas.data(), 800, 600);
         TH2F* fr2 = new TH2F(Form("fr_%s", theCent.data()), 
                              Form("eta/pi0 ratio (%s), Pb-Pb, 5.02 TeV;p_#text{T} (GeV/c);#eta / #pi^{0}", 
                                   theCent.data()), 
@@ -159,112 +192,32 @@ void eta_to_pi0_ratio_param_tf1() {
         fr2->Draw();
         auto leg = utils_plotting::GetLegend(0.5, 0.2, 0.90, 0.4, true /*theDrawAlready*/); // this already removes the boarder
 
-        // error band, dont add to Lege
+        // the errorband for the parametrization
         utils_plotting::DrawAndAdd(g_eta_to_pi0_function_error_band,"same3", lColor, 1.0,
-                                   leg, "Ratio param. uncertainty", "lep", lLegendTextSize, true /*theDrawLegAlready*/, 
+                                   leg, g_eta_to_pi0_function_error_band.GetName(), "lep", lLegendTextSize, true /*theDrawLegAlready*/, 
                                    3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
-        f_eta_to_pi0.SetNpx(10000);
+        
+        // the actual parametrization
         utils_plotting::DrawAndAdd(f_eta_to_pi0,"same", lColor, 1.0, 
-                                   leg, theCent.data(), "l", lLegendTextSize, true /*theDrawLegAlready*/, 
+                                   leg, f_eta_to_pi0.GetName(), "l", lLegendTextSize, true /*theDrawLegAlready*/, 
                                    3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
-
-        utils_plotting::DrawAndAdd(g_eta_to_pi0_fluidum_pred_err,"sameP", lColor, 1.0, 
-                                   leg, Form("%s (predicted, data+FluiduM)", theCent.data()), "p", lLegendTextSize, true /*theDrawLegAlready*/, 
+        
+        // the fluidum prediction as TGraphErrors
+        utils_plotting::DrawAndAdd(g_eta_to_pi0_fluidum_points_werr,"sameP", lColor, 1.0, 
+                                   leg, g_eta_to_pi0_fluidum_points_werr.GetName(), "p", lLegendTextSize, true /*theDrawLegAlready*/, 
                                    20 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
+
+        // save to file
+        TFile &f = *new TFile("eta_to_pi0_ratio_param_tf1_PbPb_5020TeV_2025_03_30.root", "update");
+        f_eta_to_pi0.Write();
+        g_eta_to_pi0_fluidum_points_werr.Write();
+        g_eta_to_pi0_function_error_band.Write();
+        f.Close();
     };
-    
-    // f_eta_to_pi0_30_50->SetLineColor(kCyan);
-    // f_eta_to_pi0_30_50->SetNpx(10000);
-    // g_eta_to_pi0_error_band_30_50->Draw("3");
-    // f_eta_to_pi0_30_50->DrawCopy("same");
-    // legend->AddEntry(f_eta_to_pi0_30_50, "30-50%", "l");
 
-    // f_eta_to_pi0_pp->SetLineColor(kBlack);
-    // f_eta_to_pi0_pp->SetNpx(10000);
-    // f_eta_to_pi0_pp->SetLineStyle(3);
-    // f_eta_to_pi0_pp->DrawCopy("same");
-    // legend->AddEntry(f_eta_to_pi0_pp, "pp", "l");
-
-    // legend->Draw();
-
-    //
-    // second plot: parameterizations for one centrality class with the predicted values
-    // 
-
-    // auto plotSingleCentralityClass_onlyMine = [&](std::string theCent){
-    //     bool isCentral = theCent[0]=='0';
-
-    //     TF1 &f_eta_to_pi0 = isCentral 
-    //         ? *f_eta_to_pi0_00_10 
-    //         : *f_eta_to_pi0_30_50;
-    //     f_eta_to_pi0.SetNpx(1000);
-        
-    //     TGraphErrors &g_eta_to_pi0 = isCentral 
-    //         ? *g_eta_to_pi0_predicted_00_10 
-    //         : *g_eta_to_pi0_predicted_30_50;
-        
-    //     TGraphErrors &g_eta_to_pi0_function_error_band = isCentral 
-    //         ? *g_eta_to_pi0_error_band_00_10 
-    //         : *g_eta_to_pi0_error_band_30_50;
-
-    //     std::string lName(Form("c_%s", theCent.data()));
-    //     TCanvas* c2 = new TCanvas(lName.data(), lName.data(), 800, 600);
-    //     TH2F* fr2 = new TH2F(Form("fr_%s", theCent.data()), 
-    //                          Form("eta/pi0 ratio (%s), Pb-Pb, 5.02 TeV;p_#text{T} (GeV/c);#eta / #pi^{0}", 
-    //                               theCent.data()), 
-    //                          1, 0., 8., 1, 0., 0.7);
-    //     fr2->Draw();
-    //     auto leg = utils_plotting::GetLegend(0.5, 0.2, 0.90, 0.4, true /*theDrawAlready*/); // this already removes the boarder
-
-    //     // error band, dont add to Lege
-    //     utils_plotting::DrawAndAdd(g_eta_to_pi0_function_error_band,"same3", kAzure, 1.0,
-    //                                leg, "Ratio param. uncertainty", "lep", lLegendTextSize, true /*theDrawLegAlready*/, 
-    //                                3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
-
-    //     utils_plotting::DrawAndAdd(f_eta_to_pi0,"same", kAzure, 1.0, 
-    //                                leg, theCent.data(), "l", lLegendTextSize, true /*theDrawLegAlready*/, 
-    //                                3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
-
-    //     utils_plotting::DrawAndAdd(g_eta_to_pi0,"sameP", kAzure, 1.0, 
-    //                                leg, Form("%s (predicted, data+FluiduM)", theCent.data()), "p", lLegendTextSize, true /*theDrawLegAlready*/, 
-    //                                20 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
-    // };
-
-    plotSingleCentralityClass("0-10%");
-    // plotSingleCentralityClass("30-50%");
-
-    //
-    // save parameterizations to file
-    //
-
-    // TFile *f = new TFile("eta_to_pi0_ratio_param_tf1_PbPb_5020TeV_2024_12_18.root", "recreate");
-    // for (auto const &iPair : lMap_f_eta_to_pi0_func_err) {
-    //     iPair.second.first->Write();
-    //     iPair.second.second->Write();
-    // }
-    // f_eta_to_pi0_pp->Write();
-
-    // f_eta_to_pi0_err_00_20->Write();
-    // f_eta_to_pi0_err_20_40->Write();
-    // f_eta_to_pi0_err_40_60->Write();
-    // f_eta_to_pi0_err_60_80->Write();
-    // f_eta_to_pi0_err_00_10->Write();
-    // f_eta_to_pi0_err_30_50->Write();
-
-    // g_eta_to_pi0_error_band_00_20->Write();
-    // g_eta_to_pi0_error_band_20_40->Write();
-    // g_eta_to_pi0_error_band_40_60->Write();
-    // g_eta_to_pi0_error_band_60_80->Write();
-    // g_eta_to_pi0_error_band_00_10->Write();
-    // g_eta_to_pi0_error_band_30_50->Write();
-
-    // g_eta_to_pi0_predicted_00_20->Write();
-    // g_eta_to_pi0_predicted_20_40->Write();
-    // g_eta_to_pi0_predicted_40_60->Write();
-    // g_eta_to_pi0_predicted_60_80->Write();
-    // g_eta_to_pi0_predicted_00_10->Write();
-    // g_eta_to_pi0_predicted_30_50->Write();
-
-    // f->Close();
-  
+    // plot all centralities and save to file
+    for (auto const &iPair : lMapColors){
+        std::string const &lCent = iPair.first;
+        plotSingleCentralityClass(lCent);
+    }
 }
