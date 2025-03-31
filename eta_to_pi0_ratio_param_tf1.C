@@ -173,11 +173,27 @@ void eta_to_pi0_ratio_param_tf1() {
     //////////////////////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////////////////////
     // 3) ================================ the plotting function for all cents ===================
-    auto plotSingleCentralityClass = [&](std::string const &theCent, 
+    auto plotSingleCentralityClass = [&](std::string const &theCent,
+                                         bool thePlotFluidumPrediction = true, 
                                          TCanvas *theCanvasDrawOn = nullptr){
        
-
-        float lLegendTextSize = 0.05; // Removed duplicate declaration
+        auto getLegendFromCanvas = [](TCanvas &theCanvas){
+        
+            TList *primitives = theCanvas.GetListOfPrimitives();
+            TIter next(primitives);
+            TObject *obj;
+            while ((obj = next())) {
+                if (obj->InheritsFrom("TLegend")) {
+                    TLegend *legend = (TLegend*)obj;
+                    std::cout << "Found a legend: " << legend->GetName() << std::endl;
+                    return legend;
+                }
+            }
+            std::cout << "Canvas not found!" << std::endl;
+            return static_cast<TLegend*>(nullptr);
+        };
+        
+        float lLegendTextSize = 0.04; 
         Color_t lColor = lMapColors.at(theCent);
         
         // TF1 function
@@ -188,42 +204,51 @@ void eta_to_pi0_ratio_param_tf1() {
         auto &g_eta_to_pi0_fluidum_points_werr = *lMap_g_eta_to_pi0_fluidum_points_w_errors.at(theCent);
         
         printf("SFS f_eta_to_pi0.GetName() = %s\n, g_eta_to_pi0_function_error_band.GetName() = %s\n, g_eta_to_pi0_fluidum_points_werr.data() = %s\n\n", f_eta_to_pi0.GetName(), g_eta_to_pi0_function_error_band.GetName(), g_eta_to_pi0_fluidum_points_werr.GetName());
-
-        std::string lNameCanvas(Form("c_%s\n", theCent.data()));
-        TCanvas &c2 = theCanvasDrawOn 
-            ? *theCanvasDrawOn
-            : *new TCanvas(lNameCanvas.data(), lNameCanvas.data(), 800, 600);
-        c2.cd();
         
-        if (!theCanvasDrawOn) {
+        // decide & prepare Canvas )if a new one has to be created
+        bool lNewCanvas = !theCanvasDrawOn;
+        bool lIsMultiCent = !thePlotFluidumPrediction;
+        std::string lNameCanvas(Form("c_%s\n", lIsMultiCent ? "allCents" : theCent.data()));
+        TCanvas &c2 = lNewCanvas 
+            ? *new TCanvas(lNameCanvas.data(), lNameCanvas.data(), 800, 600)
+            : *theCanvasDrawOn;
+        c2.cd();
+        if (lNewCanvas) {
+            // "#it{p}_{T} (GeV/#it{c})", 
+            // "#frac{1}{2#pi #it{N}_{ev}} #frac{d^{2}#it{N}}{#it{p}_{T}d#it{p}_{T}d#it{y}} (GeV/#it{c})^{-2}",
+            std::string lCanvasTitleOnly(Form("eta/pi0 ratio %s, Pb-Pb, 5.02 TeV", 
+                                         lIsMultiCent ? "in cent. classes" : theCent.data()));
             TH2F* fr2 = new TH2F(Form("fr_%s", theCent.data()), 
-                                 Form("eta/pi0 ratio (%s), Pb-Pb, 5.02 TeV;p_#text{T} (GeV/c);#eta / #pi^{0}", 
-                                     theCent.data()), 
+                                 Form("%s;#it{p}_{T} (GeV/#it{c});#eta / #pi^{0}", 
+                                     lCanvasTitleOnly.data()), 
                                  1, 0., 8., 1, 0., 0.7);
+            gStyle->SetOptStat(kFALSE);
             fr2->Draw();
         }
-        TLegend *leg = theCanvasDrawOn
-            ? static_cast<TLegend*>(nullptr)
-            : utils_plotting::GetLegend(0.5, 0.2, 0.90, 0.4, true /*theDrawAlready*/); // this already removes the boarder
 
-        // do the plots
-
+        TLegend *leg = lNewCanvas
+            ? utils_plotting::GetLegend(0.5, 0.15, 0.90, 0.49, true /*theDrawAlready*/) // this already removes the boarder
+            : getLegendFromCanvas(*theCanvasDrawOn);
+            
+        // done preparing, do the plotting
         // the errorband for the parametrization
-        utils_plotting::DrawAndAdd(g_eta_to_pi0_function_error_band,"same3", lColor, 1.0,
-                                   leg, g_eta_to_pi0_function_error_band.GetName(), "lep", lLegendTextSize, true /*theDrawLegAlready*/, 
-                                   3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
+        utils_plotting::DrawAndAdd(g_eta_to_pi0_function_error_band,"same3", lColor, 1.0); //,
+                                //    leg, g_eta_to_pi0_function_error_band.GetName(), "lep", lLegendTextSize, true /*theDrawLegAlready*/, 
+                                //    3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
         
         // the actual parametrization
         utils_plotting::DrawAndAdd(f_eta_to_pi0,"same", lColor, 1.0, 
-                                   leg, f_eta_to_pi0.GetName(), "l", lLegendTextSize, true /*theDrawLegAlready*/, 
+                                   leg, Form("%s", theCent.data()), "l", lLegendTextSize, true /*theDrawLegAlready*/, 
                                    3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
         
         // the fluidum prediction as TGraphErrors
-        utils_plotting::DrawAndAdd(g_eta_to_pi0_fluidum_points_werr,"sameP", lColor, 1.0, 
-                                   leg, g_eta_to_pi0_fluidum_points_werr.GetName(), "p", lLegendTextSize, true /*theDrawLegAlready*/, 
-                                   20 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
-
-        // save to file
+        if (thePlotFluidumPrediction){
+            utils_plotting::DrawAndAdd(g_eta_to_pi0_fluidum_points_werr,"sameP", kBlue, 1.0, 
+                                    leg, g_eta_to_pi0_fluidum_points_werr.GetName(), "p", lLegendTextSize, true /*theDrawLegAlready*/, 
+                                    20 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
+        }
+        
+         // save to file
         TFile &f = *new TFile("eta_to_pi0_ratio_param_tf1_PbPb_5020TeV_2025_03_30.root", "update");
         f_eta_to_pi0.Write();
         g_eta_to_pi0_fluidum_points_werr.Write();
@@ -232,11 +257,16 @@ void eta_to_pi0_ratio_param_tf1() {
         return &c2;
     }; // end plotSingleCentralityClass
 
-    // 4) ================================ iterate over all cents ================================
-    // plot all centralities
+    // 4) ================================ call the plotting function ================================
+    // 4.1) plot all centralities
     TCanvas *cMaster = nullptr;
     for (auto const &iPair : lMapColors){
         std::string const &lCent = iPair.first;
-        cMaster = plotSingleCentralityClass(lCent, cMaster);
+        cMaster = plotSingleCentralityClass(lCent, false, cMaster);
     }
+
+    // 4.2 plot 0-10 and 30-50%
+    auto &c_0010 = *plotSingleCentralityClass("0-10%");
+    auto &c_3050 = *plotSingleCentralityClass("30-50%");
+
 }
