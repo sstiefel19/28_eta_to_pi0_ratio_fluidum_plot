@@ -11,6 +11,35 @@
 // Stephan Stiefelmaier & Klaus Reygers
 //
 
+void DrawGammaSetMarkerTGraphAsym(  TGraphAsymmErrors &graph,
+                                    Style_t markerStyle,
+                                    Size_t markerSize,
+                                    Color_t markerColor,
+                                    Color_t lineColor,
+                                    Width_t lineWidth   =1,
+                                    Bool_t boxes        = kFALSE,
+                                    Color_t fillColor   = 0,
+                                    Bool_t isHollow     = kFALSE
+                                    ) {
+    graph.SetMarkerStyle(markerStyle);
+    graph.SetMarkerSize(markerSize);
+    graph.SetMarkerColor(markerColor);
+    graph.SetLineColor(lineColor);
+    graph.SetLineWidth(lineWidth);
+    if (boxes){
+        graph.SetFillColor(fillColor);
+        if (fillColor!=0){
+            if (!isHollow){
+                graph.SetFillStyle(1001);
+            } else {
+                graph.SetFillStyle(0);
+            }
+        } else {
+            graph.SetFillStyle(0);
+        }
+    }
+}
+
 // start and steer the plotting: search for: '4) ================================ iterate over all cents'
 void eta_to_pi0_ratio_param_tf1() {
 
@@ -84,7 +113,7 @@ void eta_to_pi0_ratio_param_tf1() {
     
     // 2) =========================== fill structures ================================
     // fill lMap_f_eta_to_pi0_func_and_f_rel_err 
-    // contains <0-10%, <f_ratio, f_ratio_err>>
+    // contains for instance <0-10%, <f_ratio, f_ratio_err>>
     std::map<std::string, std::pair<TF1*, TF1*>> lMap_f_eta_to_pi0_func_and_f_rel_err; 
     for (auto const &iPair : lMapCentsParsPars){
         auto const &lCent = iPair.first;
@@ -106,8 +135,6 @@ void eta_to_pi0_ratio_param_tf1() {
         };
         lMap_f_eta_to_pi0_func_and_f_rel_err.insert({ lCent, { createTF1andSetPars(""), createTF1andSetPars("err") } });
     }
-    // lMap_f_eta_to_pi0_func_and_f_rel_err is filled now
-
 
     // create TGraphErrors representing the error band around the eta/pi0 parameterizations
     auto createErrorBandGraph = [&](std::pair<std::string, std::pair<TF1*, TF1*>> const &thePairCentPairTF1s){
@@ -134,7 +161,6 @@ void eta_to_pi0_ratio_param_tf1() {
         g_err_band.SetFillColorAlpha(lMapColors.at(lCent), 0.3);  // Semi-transparent red error band
         return &g_err_band;
     };
-
     
     // fill lMapGraphFunctionErrorbands
     // create map for bands
@@ -145,7 +171,6 @@ void eta_to_pi0_ratio_param_tf1() {
         lMapGraphFunctionErrorbands.insert(
             std::pair{ lCent, createErrorBandGraph(iPair) });
     }
-    // lMapGraphFunctionErrorbands is filled now
     
     typedef std::pair<std::vector<double> const &, std::vector<double> const &> TPairVecVec;
     auto createGraphFluidum = [&](std::pair<std::string, TPairVecVec> const &thePairCentPairVecs){
@@ -193,7 +218,7 @@ void eta_to_pi0_ratio_param_tf1() {
             return static_cast<TLegend*>(nullptr);
         };
         
-        float lLegendTextSize = 0.04; 
+        float lLegendTextSize = 0.035; 
         Color_t lColor = lMapColors.at(theCent);
         
         // TF1 function
@@ -203,50 +228,79 @@ void eta_to_pi0_ratio_param_tf1() {
         // graph with fluidum points 
         auto &g_eta_to_pi0_fluidum_points_werr = *lMap_g_eta_to_pi0_fluidum_points_w_errors.at(theCent);
         
-        printf("SFS f_eta_to_pi0.GetName() = %s\n, g_eta_to_pi0_function_error_band.GetName() = %s\n, g_eta_to_pi0_fluidum_points_werr.data() = %s\n\n", f_eta_to_pi0.GetName(), g_eta_to_pi0_function_error_band.GetName(), g_eta_to_pi0_fluidum_points_werr.GetName());
-        
         // decide & prepare Canvas )if a new one has to be created
         bool lNewCanvas = !theCanvasDrawOn;
         bool lIsMultiCent = !thePlotFluidumPrediction;
-        std::string lNameCanvas(Form("c_%s\n", lIsMultiCent ? "allCents" : theCent.data()));
+        std::string lNameCanvas(Form("c_%s\n", lIsMultiCent ? "allCents" : TString(theCent.data()).ReplaceAll("%","").Data()));
         TCanvas &c2 = lNewCanvas 
             ? *new TCanvas(lNameCanvas.data(), lNameCanvas.data(), 800, 600)
             : *theCanvasDrawOn;
         c2.cd();
         if (lNewCanvas) {
-            // "#it{p}_{T} (GeV/#it{c})", 
-            // "#frac{1}{2#pi #it{N}_{ev}} #frac{d^{2}#it{N}}{#it{p}_{T}d#it{p}_{T}d#it{y}} (GeV/#it{c})^{-2}",
             std::string lCanvasTitleOnly(Form("eta/pi0 ratio %s, Pb-Pb, 5.02 TeV", 
                                          lIsMultiCent ? "in cent. classes" : theCent.data()));
+
+            float lXmax = lIsMultiCent ? 8. : 12.2;    
+            float lYmax = lIsMultiCent ? 0.7 : 1.;
             TH2F* fr2 = new TH2F(Form("fr_%s", theCent.data()), 
                                  Form("%s;#it{p}_{T} (GeV/#it{c});#eta / #pi^{0}", 
                                      lCanvasTitleOnly.data()), 
-                                 1, 0., 8., 1, 0., 0.7);
+                                 1, 0., 12.2, 1, 0., lYmax);
+            fr2->GetXaxis()->SetTitleSize(0.045);
+            fr2->GetYaxis()->SetTitleSize(0.045);
             gStyle->SetOptStat(kFALSE);
             fr2->Draw();
         }
 
         TLegend *leg = lNewCanvas
-            ? utils_plotting::GetLegend(0.5, 0.15, 0.90, 0.49, true /*theDrawAlready*/) // this already removes the boarder
+            ? lIsMultiCent 
+                ? utils_plotting::GetLegend(0.45, 0.15, 0.90, 0.49, true /*theDrawAlready*/) // this already removes the boarder
+                : utils_plotting::GetLegend(0.43, 0.15, 0.88, 0.34, true /*theDrawAlready*/)
             : getLegendFromCanvas(*theCanvasDrawOn);
             
         // done preparing, do the plotting
+        // plot my measurement markers for my cents
+        if (!lIsMultiCent && (theCent=="0-10%" || theCent=="30-50%")){
+            std::string lFnameMeasurement("attachments/data_PCMResults_PbPb_5.02TeV_2025-03-12.root");
+            std::string lDir(Form("Eta_PbPb_5.02TeV_%s", theCent.data()));
+            auto *pg = (TGraphAsymmErrors*)utils_files_strings::GetObjectFromPathInFile(
+                lFnameMeasurement, 
+                Form("%s/EtatoPi0RatioSys", lDir.data()), 
+                Form("graph_%s", theCent.data()));
+            
+            auto *ph = (TH1*)utils_files_strings::GetObjectFromPathInFile(
+                lFnameMeasurement, 
+                Form("%s/EtatoPi0Ratio", lDir.data()), 
+                Form("histo_%s", theCent.data()));
+            
+            if (!(pg&&ph)) { 
+                printf("plotSingleCentralityClass(): Error: syst graph or stat histo for %s could not be obtained from external file.\n", 
+                       theCent.data()); 
+            }
+            auto &g_syst = *pg;
+            DrawGammaSetMarkerTGraphAsym(g_syst,26,0,kGray+1,kGray+1,2,kTRUE);
+            g_syst.Draw("p,2,same");
+            
+            utils_plotting::DrawAndAdd(*ph, "sameP", kBlack, 1.0, 
+                                       leg, "Data PCM", "p", lLegendTextSize, true /*theDrawLegAlready*/, 20 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
+        }
+
         // the errorband for the parametrization
         utils_plotting::DrawAndAdd(g_eta_to_pi0_function_error_band,"same3", lColor, 1.0); //,
                                 //    leg, g_eta_to_pi0_function_error_band.GetName(), "lep", lLegendTextSize, true /*theDrawLegAlready*/, 
                                 //    3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
         
-        // the actual parametrization
-        utils_plotting::DrawAndAdd(f_eta_to_pi0,"same", lColor, 1.0, 
-                                   leg, Form("%s", theCent.data()), "l", lLegendTextSize, true /*theDrawLegAlready*/, 
-                                   3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
-        
         // the fluidum prediction as TGraphErrors
         if (thePlotFluidumPrediction){
             utils_plotting::DrawAndAdd(g_eta_to_pi0_fluidum_points_werr,"sameP", kBlue, 1.0, 
-                                    leg, g_eta_to_pi0_fluidum_points_werr.GetName(), "p", lLegendTextSize, true /*theDrawLegAlready*/, 
-                                    20 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
+                                       leg, "FluiduM, tuned to #frac{K^{ #pm}}{#pi^{ #pm}} ratio in data", "p", lLegendTextSize, true /*theDrawLegAlready*/, 
+                                       20 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
         }
+        // the actual parametrization
+        std::string lLegTextParamSinglePlot("Fit: Data&FluiduM");
+        utils_plotting::DrawAndAdd(f_eta_to_pi0,"same", lColor, 1.0, 
+                                   leg, lIsMultiCent ? Form("Fit %s", theCent.data()) : lLegTextParamSinglePlot.data(), "l", lLegendTextSize, true /*theDrawLegAlready*/, 
+                                   3 /*theMarkerStyle*/, 1.0 /*theMarkerSize*/);
         
          // save to file
         TFile &f = *new TFile("eta_to_pi0_ratio_param_tf1_PbPb_5020TeV_2025_03_30.root", "update");
@@ -269,4 +323,9 @@ void eta_to_pi0_ratio_param_tf1() {
     auto &c_0010 = *plotSingleCentralityClass("0-10%");
     auto &c_3050 = *plotSingleCentralityClass("30-50%");
 
+    utils_plotting::SaveCanvasAs(*cMaster);
+    utils_plotting::SaveCanvasAs(c_0010);
+    utils_plotting::SaveCanvasAs(c_3050);
+    // gSystem->mkdir("pdf");
+    // cMaster->SaveAs();
 }
